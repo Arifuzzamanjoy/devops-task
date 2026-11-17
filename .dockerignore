@@ -1,0 +1,7 @@
+# Allowlist: only what the image needs
+*
+!app/
+!requirements.txt
+!VERSION
+**/__pycache__
+**/*.pyc

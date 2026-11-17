@@ -1,0 +1,39 @@
+# Local: docker compose up -d --build  ->  http://localhost:8080
+# Server: scripts/deploy.sh sets APP_IMAGE in .env, nothing is built there
+
+services:
+  app:
+    image: ${APP_IMAGE:-devops-task:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: devops-task-app
+    ports:
+      - "${APP_PUBLISH_PORT:-8080}:8080"
+    environment:
+      APP_PORT: "8080"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+      start_interval: 2s
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M

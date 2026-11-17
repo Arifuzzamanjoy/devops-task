@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: devops-task
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+  - hpa.yaml
+
+# Only stable labels here: they end up in selectors, which are immutable.
+# The release is identified by the image tag instead of a version label.
+labels:
+  - pairs:
+      app.kubernetes.io/name: devops-task
+      app.kubernetes.io/managed-by: kustomize
+    includeSelectors: true
+
+# Built from k8s/secret.env, which is git-ignored (copy secret.env.example).
+# The name gets a content hash, so changing a value rolls the pods.
+secretGenerator:
+  - name: devops-task-secret
+    envs:
+      - secret.env

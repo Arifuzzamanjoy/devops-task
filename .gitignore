@@ -19,6 +19,7 @@ crash.log
 
 # Local config and secrets
 .env
+k8s/secret.env
 
 # Logs
 *.log

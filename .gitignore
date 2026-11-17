@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Tests
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+
+# Local config and secrets
+.env
+
+# Logs
+*.log
+health_log.txt*
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store

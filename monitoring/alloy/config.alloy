@@ -1,0 +1,49 @@
+// Collect logs from every Docker container and ship them to Loki.
+
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+// Labels kept small on purpose: container, compose service (as job) and level.
+// The __meta_docker_* labels must stay here, loki.source.docker needs them.
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container_name"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "job"
+  }
+}
+
+loki.source.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  targets          = discovery.relabel.containers.output
+  forward_to       = [loki.process.json.receiver]
+  refresh_interval = "5s"
+}
+
+// The app logs JSON; promote only "level" to a label. Path, status and
+// duration stay in the line and are filtered with `| json` in LogQL.
+loki.process "json" {
+  forward_to = [loki.write.loki.receiver]
+
+  stage.json {
+    expressions = { level = "level" }
+  }
+
+  stage.labels {
+    values = { level = "" }
+  }
+}
+
+loki.write "loki" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

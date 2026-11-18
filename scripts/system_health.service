@@ -1,0 +1,12 @@
+[Unit]
+Description=System Health Check
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/scripts/system_health.sh --disk 80 --cpu 90 --mem 85 --log-file /var/log/health_log.txt
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -25,6 +25,9 @@ k8s/secret.env
 *.log
 health_log.txt*
 
+# Deploy state on the server
+.deploy/
+
 # Editors and OS
 .vscode/
 .idea/

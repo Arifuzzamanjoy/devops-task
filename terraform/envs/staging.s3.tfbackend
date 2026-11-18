@@ -1,0 +1,5 @@
+bucket   = "devops-task-tfstate"
+key      = "staging/terraform.tfstate"
+endpoints = {
+  s3 = "https://eu2.contabostorage.com"
+}

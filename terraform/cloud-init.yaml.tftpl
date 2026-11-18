@@ -1,0 +1,104 @@
+#cloud-config
+# Bootstrap for the Contabo VPS (Ubuntu 24.04), rendered by templatefile().
+# Shell variables are written as plain $VAR so Terraform leaves them alone.
+
+package_update: true
+package_upgrade: true
+packages:
+  - ca-certificates
+  - curl
+  - git
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+
+users:
+  - default
+  - name: ${deploy_user}
+    shell: /bin/bash
+    lock_passwd: true
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/10-hardening.conf
+    permissions: "0644"
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin prohibit-password
+      MaxAuthTries 3
+      X11Forwarding no
+
+  # Rotate container logs on disk so the json-file driver can't fill the disk.
+  # Alloy reads these files and ships them to Loki.
+  - path: /etc/docker/daemon.json
+    permissions: "0644"
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": { "max-size": "10m", "max-file": "3" },
+        "live-restore": true
+      }
+
+  - path: /etc/fail2ban/jail.d/sshd.local
+    permissions: "0644"
+    content: |
+      [sshd]
+      enabled = true
+      maxretry = 5
+      bantime = 1h
+
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+
+runcmd:
+  # Docker from the official apt repo
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.asc
+  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+  - systemctl enable --now docker
+  - usermod -aG docker ${deploy_user}
+
+  # Firewall: SSH + app only. Grafana stays on 127.0.0.1 (see compose file),
+  # because Docker-published ports skip UFW rules.
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow from ${allowed_ssh_cidr} to any port 22 proto tcp
+  - ufw allow ${app_port}/tcp
+  - ufw --force enable
+
+  - systemctl restart ssh
+  - systemctl enable --now fail2ban
+
+  # App checkout + runtime config
+  - git clone ${repo_url} ${app_dir}
+  - |
+    GF_PASS="$(openssl rand -hex 16)"
+    cat > ${app_dir}/.env <<EOF
+    COMPOSE_FILE=docker-compose.yml:docker-compose.monitoring.yml
+    ENVIRONMENT=${environment}
+    LOG_LEVEL=info
+    APP_PUBLISH_PORT=${app_port}
+    GRAFANA_BIND=127.0.0.1
+    GF_SECURITY_ADMIN_USER=admin
+    GF_SECURITY_ADMIN_PASSWORD=$GF_PASS
+    EOF
+  - chmod 600 ${app_dir}/.env
+  - chown -R ${deploy_user}:${deploy_user} ${app_dir}
+
+  # Health check every 5 minutes
+  - mkdir -p /opt/scripts
+  - ln -sf ${app_dir}/scripts/system_health.sh /opt/scripts/system_health.sh
+  - cp ${app_dir}/scripts/system_health.service ${app_dir}/scripts/system_health.timer /etc/systemd/system/
+  - systemctl daemon-reload
+  - systemctl enable --now system_health.timer
+
+  # Start the monitoring stack now; the app itself arrives with the first CD run
+  - runuser -u ${deploy_user} -- sh -c 'cd ${app_dir} && docker compose up -d prometheus loki alloy grafana node-exporter cadvisor'

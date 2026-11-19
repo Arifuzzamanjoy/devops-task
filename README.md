@@ -109,7 +109,7 @@ On the server everything lives in `/opt/devops-task` (a git checkout). `.env` (c
 
 ## Kubernetes
 
-Manifests in `k8s/` (Kustomize): Deployment with 2 replicas, `maxUnavailable: 0` / `maxSurge: 1`, `/health` probes, requests and limits, non-root user, read-only root filesystem, all capabilities dropped and `RuntimeDefault` seccomp. Plus a Service, an Ingress (nginx class; port-forward on kind), a ConfigMap, an HPA (2–5 replicas at 70% CPU), and a Secret generated from a git-ignored `k8s/secret.env`.
+Manifests in `k8s/` (Kustomize): Deployment with 2 replicas, `maxUnavailable: 0` / `maxSurge: 1`, `/health` probes, requests and limits, a 5s `preStop` sleep, non-root user, read-only root filesystem, all capabilities dropped and `RuntimeDefault` seccomp. Plus a Service, an Ingress (nginx class; port-forward on kind), a ConfigMap, an HPA (2–5 replicas at 70% CPU), and a Secret generated from a git-ignored `k8s/secret.env`.
 
 ```bash
 kind create cluster --name devops-task
@@ -129,14 +129,72 @@ kubectl apply -k k8s/
 kubectl port-forward -n devops-task svc/devops-task 8080:80
 ```
 
-### Rolling update and rollback
+### Rolling update and rollback (real output)
+
+Recorded on kind (Kubernetes v1.37). A curl pod sent 5 requests per second to the Service for 100 seconds during the update and the rollback:
 
 ```bash
-kubectl set image deployment/devops-task devops-task=ghcr.io/arifuzzamanjoy/devops-task:1.1.0 -n devops-task
-kubectl rollout status deployment/devops-task -n devops-task
-kubectl rollout undo deployment/devops-task -n devops-task
-kubectl rollout history deployment/devops-task -n devops-task
+kubectl run load -n devops-task --image=curlimages/curl:8.10.1 --restart=Never -- sh -c \
+  'ok=0; fail=0; end=$(( $(date +%s) + 100 )); while [ $(date +%s) -lt $end ]; do
+     if curl -sf -m 2 http://devops-task/ >/dev/null; then ok=$((ok+1)); else fail=$((fail+1)); fi
+     sleep 0.2; done; echo "requests ok=$ok failed=$fail"'
 ```
+
+```
+# traffic checker running: 5 requests/s against the Service during update and rollback
+
+$ kubectl set image deployment/devops-task devops-task=ghcr.io/arifuzzamanjoy/devops-task:1.1.0 -n devops-task
+deployment.apps/devops-task image updated
+
+$ kubectl rollout status deployment/devops-task -n devops-task
+Waiting for deployment "devops-task" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "devops-task" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "devops-task" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "devops-task" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "devops-task" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "devops-task" rollout to finish: 1 old replicas are pending termination...
+deployment "devops-task" successfully rolled out
+
+$ kubectl get pods -n devops-task -l app.kubernetes.io/name=devops-task
+NAME                           READY   STATUS        RESTARTS   AGE
+devops-task-5b87587dff-wtccz   1/1     Terminating   0          28s
+devops-task-7d9fbcd7cd-gvrzj   1/1     Running       0          14s
+devops-task-7d9fbcd7cd-lz8zf   1/1     Running       0          7s
+
+$ kubectl rollout history deployment/devops-task -n devops-task
+deployment.apps/devops-task 
+REVISION  CHANGE-CAUSE
+2         <none>
+3         <none>
+4         <none>
+5         <none>
+
+$ kubectl rollout undo deployment/devops-task -n devops-task
+Warning: resource deployments/devops-task was previously managed with 'kubectl apply'. Rolling back will not update the kubectl.kubernetes.io/last-applied-configuration annotation, which may cause unexpected behavior on future 'kubectl apply' operations. Consider using 'kubectl apply' with your previous configuration file instead.
+deployment.apps/devops-task rolled back
+
+$ kubectl rollout status deployment/devops-task -n devops-task
+Waiting for deployment "devops-task" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "devops-task" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "devops-task" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "devops-task" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "devops-task" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "devops-task" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "devops-task" rollout to finish: 1 old replicas are pending termination...
+deployment "devops-task" successfully rolled out
+
+$ kubectl get deployment devops-task -n devops-task -o jsonpath='{..image}'
+ghcr.io/arifuzzamanjoy/devops-task:1.0.0
+
+$ kubectl logs load -n devops-task
+requests ok=462 failed=0
+
+$ kubectl get hpa -n devops-task
+NAME          REFERENCE                TARGETS       MINPODS   MAXPODS   REPLICAS   AGE
+devops-task   Deployment/devops-task   cpu: 8%/70%   2         5         2          6m12s
+```
+
+**0 of 462 requests failed.** The first run without `preStop` lost 3 of 412: Kubernetes sends SIGTERM and removes the pod from the Service at the same moment, so a few requests still reach a pod that is shutting down. Five seconds of `preStop` sleep covers that gap. The `last-applied-configuration` warning is expected after `rollout undo`; in a GitOps setup the rollback would be a revert commit.
 
 ### On EKS
 

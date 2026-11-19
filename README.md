@@ -360,7 +360,9 @@ The VPS swap restarts the container (a few seconds). Zero downtime there would n
 
 ## Verified on a real server
 
-Everything except `terraform apply` and a live CD deploy was run on a Contabo VPS (Ubuntu 24.04, Docker 29) that also hosts other services, so the app used port 8088 there. Checked: deploy, automatic rollback of a broken image, manual rollback, Prometheus targets, logs in Loki, provisioned dashboards, config reload after `git checkout`, and the health script's exit codes. The whole stack uses about 450 MB of RAM.
+CD deploys to a Contabo VPS (Ubuntu 24.04, Docker 29) that also hosts other services, so the app uses port 8088 there. [Successful deploy run](https://github.com/Arifuzzamanjoy/devops-task/actions/runs/44547328448): build and push, SSH deploy, `/health` smoke test.
+
+Everything except `terraform apply` was run on that server. Checked: deploy, automatic rollback of a broken image, manual rollback, Prometheus targets, logs in Loki, provisioned dashboards, config reload after `git checkout`, and the health script's exit codes. The whole stack uses about 450 MB of RAM.
 
 That testing caught problems that don't show up locally:
 

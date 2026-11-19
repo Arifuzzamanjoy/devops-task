@@ -7,7 +7,7 @@ A small FastAPI service taken from code to a monitored, automatically deployed s
 | | |
 |---|---|
 | App | `GET /` info, `GET /health`, `GET /metrics` (request count, errors, latency histogram) |
-| Image | `python:3.12.7-slim`, multi-stage, non-root, **~50 MB compressed / 208 MB unpacked** |
+| Image | `python:3.12.16-slim-trixie`, multi-stage, non-root, **~49 MB compressed / 202 MB unpacked**, 0 fixable CRITICAL CVEs |
 | CI | flake8, pytest (94% coverage), hadolint, shellcheck, Trivy, terraform validate, kubeconform |
 | CD | multi-arch build → GHCR → SSH deploy → smoke test → automatic rollback |
 | Observability | Prometheus, Grafana, Loki, Alloy, Node Exporter, cAdvisor, 4 alerts, 3 dashboards |

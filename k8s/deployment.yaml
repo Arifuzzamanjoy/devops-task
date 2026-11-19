@@ -30,6 +30,12 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+          # Endpoint removal and SIGTERM happen at the same time, so keep serving
+          # for a few seconds until the Service stops sending traffic here
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 5
           envFrom:
             - configMapRef:
                 name: devops-task-config

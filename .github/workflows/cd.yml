@@ -1,7 +1,9 @@
 # On push to main: build a multi-arch image, push it to GHCR, deploy it to the
 # server over SSH, smoke test /health and roll back if it fails.
 #
-# Required secrets and variables are listed in the README.
+# The deploy job runs only when the repository variable DEPLOY_ENABLED is
+# "true" (environment variables aren't visible to job-level `if:`). Required
+# secrets and variables are listed in the README.
 
 name: CD Pipeline
 
@@ -89,6 +91,7 @@ jobs:
     name: Deploy to Contabo
     runs-on: ubuntu-latest
     needs: build-and-push
+    if: vars.DEPLOY_ENABLED == 'true'
     environment: production
 
     env:
@@ -100,6 +103,21 @@ jobs:
       HAS_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN != '' }}
 
     steps:
+      - name: Check deploy settings
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          missing=()
+          [ -n "$SSH_HOST" ]        || missing+=("variable SSH_HOST")
+          [ -n "$HEALTH_URL" ]      || missing+=("variable HEALTH_CHECK_URL")
+          [ -n "$SSH_PRIVATE_KEY" ] || missing+=("secret SSH_PRIVATE_KEY")
+          [ -n "$SSH_KNOWN_HOSTS" ] || missing+=("secret SSH_KNOWN_HOSTS")
+          if [ ${#missing[@]} -gt 0 ]; then
+            for m in "${missing[@]}"; do echo "::error::missing ${m} on the production environment"; done
+            exit 1
+          fi
+
       - name: Setup SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}

@@ -71,12 +71,15 @@ Settings (nothing is hardcoded):
 
 | Name | Where | Value |
 |---|---|---|
+| `DEPLOY_ENABLED` | repository variable | `true` once a server exists. Until then the deploy job is skipped |
 | `SSH_PRIVATE_KEY` | `production` environment secret | private key of the `deploy` user |
 | `SSH_KNOWN_HOSTS` | `production` environment secret | `ssh-keyscan -t ed25519 <server-ip>`, so the host key is pinned |
 | `GHCR_PULL_TOKEN` | `production` environment secret, optional | `read:packages` token if the image is private |
 | `SSH_HOST` | `production` environment variable | server IP |
 | `HEALTH_CHECK_URL` | `production` environment variable | e.g. `http://<ip>/health` |
 | `SSH_USER`, `APP_DIR` | `production` environment variable, optional | default `deploy`, `/opt/devops-task` |
+
+`DEPLOY_ENABLED` has to be a repository variable: environment variables aren't visible to a job-level `if:`.
 
 ## Infrastructure (Terraform on Contabo)
 

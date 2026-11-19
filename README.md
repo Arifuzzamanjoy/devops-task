@@ -58,7 +58,7 @@ make lint     # flake8 + shellcheck
 
 ## CI/CD
 
-**Pull requests** (`.github/workflows/ci.yml`): flake8 + pytest with a coverage report, hadolint + shellcheck, image build + Trivy (fails on fixable CRITICAL CVEs, HIGH goes to the Security tab), `terraform fmt/validate`, kustomize render + kubeconform.
+**Pull requests** (`.github/workflows/ci.yml`): flake8 + pytest with a coverage report, hadolint + shellcheck, image build + Trivy, pinned to a commit (fails on fixable CRITICAL CVEs, HIGH goes to the Security tab), `terraform fmt/validate`, kustomize render + kubeconform.
 
 **Push to `main`** (`.github/workflows/cd.yml`):
 

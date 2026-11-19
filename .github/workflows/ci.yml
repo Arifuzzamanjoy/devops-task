@@ -72,7 +72,7 @@ jobs:
 
       # Gate: fail on CRITICAL vulnerabilities that have a fix available
       - name: Trivy (fail on CRITICAL)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: local-scan:${{ github.sha }}
           format: table
@@ -83,7 +83,7 @@ jobs:
       # Report HIGH and CRITICAL to the Security tab, without failing
       - name: Trivy SARIF report
         if: always()
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: local-scan:${{ github.sha }}
           format: sarif
